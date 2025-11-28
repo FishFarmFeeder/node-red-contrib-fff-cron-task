@@ -1,0 +1,220 @@
+[
+    {
+        "id": "flow-1",
+        "type": "tab",
+        "label": "Cron Task Examples"
+    },
+    {
+        "id": "inject-future",
+        "type": "inject",
+        "z": "flow-1",
+        "name": "Future Date (+5s)",
+        "props": [
+            {
+                "p": "payload"
+            }
+        ],
+        "repeat": "",
+        "crontab": "",
+        "once": false,
+        "onceDelay": 0.1,
+        "topic": "",
+        "payload": "",
+        "payloadType": "date",
+        "x": 150,
+        "y": 100,
+        "wires": [
+            [
+                "function-add-5s"
+            ]
+        ]
+    },
+    {
+        "id": "function-add-5s",
+        "type": "function",
+        "z": "flow-1",
+        "name": "Add 5s",
+        "func": "var date = new Date(msg.payload);\ndate.setSeconds(date.getSeconds() + 5);\nmsg.inputDate = date;\nreturn msg;",
+        "outputs": 1,
+        "noerr": 0,
+        "initialize": "",
+        "finalize": "",
+        "libs": [],
+        "x": 330,
+        "y": 100,
+        "wires": [
+            [
+                "cron-task"
+            ]
+        ]
+    },
+    {
+        "id": "inject-cron",
+        "type": "inject",
+        "z": "flow-1",
+        "name": "Cron (Every 5s)",
+        "props": [
+            {
+                "p": "inputDate",
+                "v": "*/5 * * * * *",
+                "vt": "str"
+            }
+        ],
+        "repeat": "",
+        "crontab": "",
+        "once": false,
+        "onceDelay": 0.1,
+        "topic": "",
+        "x": 150,
+        "y": 160,
+        "wires": [
+            [
+                "cron-task"
+            ]
+        ]
+    },
+    {
+        "id": "inject-cancel",
+        "type": "inject",
+        "z": "flow-1",
+        "name": "Cancel Task",
+        "props": [
+            {
+                "p": "action",
+                "v": "cancel",
+                "vt": "str"
+            }
+        ],
+        "repeat": "",
+        "crontab": "",
+        "once": false,
+        "onceDelay": 0.1,
+        "topic": "",
+        "x": 140,
+        "y": 220,
+        "wires": [
+            [
+                "cron-task"
+            ]
+        ]
+    },
+    {
+        "id": "inject-invalid-cron",
+        "type": "inject",
+        "z": "flow-1",
+        "name": "Invalid Cron (Error)",
+        "props": [
+            {
+                "p": "inputDate",
+                "v": "invalid cron string",
+                "vt": "str"
+            }
+        ],
+        "repeat": "",
+        "crontab": "",
+        "once": false,
+        "topic": "",
+        "x": 160,
+        "y": 280,
+        "wires": [
+            [
+                "cron-task"
+            ]
+        ]
+    },
+    {
+        "id": "inject-past-date",
+        "type": "inject",
+        "z": "flow-1",
+        "name": "Past Date (Error)",
+        "props": [
+            {
+                "p": "inputDate",
+                "v": "2020-01-01 00:00:00",
+                "vt": "str"
+            }
+        ],
+        "repeat": "",
+        "crontab": "",
+        "once": false,
+        "topic": "",
+        "x": 150,
+        "y": 340,
+        "wires": [
+            [
+                "cron-task"
+            ]
+        ]
+    },
+    {
+        "id": "cron-task",
+        "type": "fff-cron-task",
+        "z": "flow-1",
+        "name": "My Scheduler",
+        "persistent": false,
+        "x": 550,
+        "y": 200,
+        "wires": [
+            [
+                "debug-success"
+            ],
+            [
+                "debug-error"
+            ]
+        ]
+    },
+    {
+        "id": "debug-success",
+        "type": "debug",
+        "z": "flow-1",
+        "name": "✅ Success",
+        "active": true,
+        "tosidebar": true,
+        "console": false,
+        "tostatus": false,
+        "complete": "true",
+        "targetType": "full",
+        "statusVal": "",
+        "statusType": "auto",
+        "x": 740,
+        "y": 180,
+        "wires": []
+    },
+    {
+        "id": "debug-error",
+        "type": "debug",
+        "z": "flow-1",
+        "name": "❌ Errors",
+        "active": true,
+        "tosidebar": true,
+        "console": false,
+        "tostatus": false,
+        "complete": "true",
+        "targetType": "full",
+        "statusVal": "",
+        "statusType": "auto",
+        "x": 740,
+        "y": 220,
+        "wires": []
+    },
+    {
+        "id": "comment-1",
+        "type": "comment",
+        "z": "flow-1",
+        "name": "Schedule Tasks",
+        "info": "Schedule tasks using dates or cron strings",
+        "x": 130,
+        "y": 60,
+        "wires": []
+    },
+    {
+        "id": "comment-2",
+        "type": "comment",
+        "z": "flow-1",
+        "name": "Error Examples",
+        "info": "These will send errors to the second output",
+        "x": 130,
+        "y": 240,
+        "wires": []
+    }
+]
