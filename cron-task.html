@@ -1,0 +1,87 @@
+<script type="text/javascript">
+    RED.nodes.registerType('fff-cron-task',{
+        category: 'function',
+        color: '#9FE5FF',
+        defaults: {
+            name: {value:""},
+            persistent: {value:false}
+        },
+        inputs:1,
+        outputs:2,
+        icon: "font-awesome/fa-clock-o",
+        label: function() {
+            return this.name||"cron-task";
+        }
+    });
+</script>
+
+<script type="text/html" data-template-name="fff-cron-task">
+    <div class="form-row">
+        <label for="node-input-name"><i class="icon-tag"></i> Name</label>
+        <input type="text" id="node-input-name" placeholder="Name">
+    </div>
+    <div class="form-row">
+        <label for="node-input-persistent"><i class="fa fa-save"></i> Persistent</label>
+        <input type="checkbox" id="node-input-persistent" style="display:inline-block; width:auto; vertical-align:baseline;">
+        <label for="node-input-persistent" style="width:auto;">Save jobs across restarts</label>
+    </div>
+    <!-- timezone setting removed; Node-RED runtime timezone should be used -->
+</script>
+
+<script type="text/html" data-help-name="fff-cron-task">
+    <p>A robust node for scheduling tasks using specific Dates or Cron patterns with persistence support.</p>
+    
+    <h3>Configuration</h3>
+    <dl class="message-properties">
+        <dt>Persistent <span class="property-type">boolean</span></dt>
+        <dd>If checked, the scheduled job will be saved and restored across Node-RED restarts.</dd>
+    </dl>
+    
+    <h3>Inputs</h3>
+    <dl class="message-properties">
+        <dt>msg.inputDate
+            <span class="property-type">string | Date</span>
+        </dt>
+        <dd>
+            The schedule definition. Can be:
+            <ul>
+                <li>A <code>Date</code> object or date string (e.g., "2025-12-25 10:00:00") for a one-time execution. <b>Must be in the future.</b></li>
+                <li>A Cron string (e.g., <code>"*/10 * * * * *"</code>) for recurring execution.</li>
+            </ul>
+        </dd>
+        
+        <dt class="optional">msg.action <span class="property-type">string</span></dt>
+        <dd>Set to <code>"cancel"</code> to stop the currently scheduled task.</dd>
+    </dl>
+
+    <h3>Outputs</h3>
+    <ol class="node-ports">
+        <li>Triggered events
+            <dl class="message-properties">
+                <dt>payload <span class="property-type">string</span></dt>
+                <dd>Returns <code>"triggered"</code> when the schedule fires.</dd>
+                
+                <dt>original_payload <span class="property-type">string | Date</span></dt>
+                <dd>The original schedule input that triggered this event.</dd>
+                
+                <dt>timestamp <span class="property-type">number</span></dt>
+                <dd>The timestamp (ms) when the event fired.</dd>
+            </dl>
+        </li>
+        <li>Errors
+            <dl class="message-properties">
+                <dt>payload <span class="property-type">string</span></dt>
+                <dd>Error message describing what went wrong.</dd>
+                
+                <dt>error <span class="property-type">object</span></dt>
+                <dd>Error details including type and context.</dd>
+            </dl>
+        </li>
+    </ol>
+
+    <h3>Details</h3>
+    <p>This node supports multiple job IDs for the same node instance. Send a `msg.job_id` with `msg.inputDate` to schedule multiple independent jobs; otherwise the default `"default"` job will be replaced when a new schedule is sent.</p>
+    <p><b>Validation:</b> Dates are validated to be in the future. Cron strings are validated using the <code>cron-parser</code> library. Invalid inputs will result in an error message on the second output.</p>
+    <p><b>Persistence:</b> When enabled, scheduled jobs are saved to Node-RED context (`scheduled_jobs`) and automatically restored after restarts or redeploys. Each job is stored under its `job_id` key.</p>
+</script>
+
