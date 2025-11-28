@@ -61,7 +61,7 @@ module.exports = function(RED) {
                         const n = j.nextInvocation();
                         if (n && (!next || n < next)) next = n;
                     }
-                } catch (err) { /* ignore */ }
+                } catch (_err) { /* ignore */ }
             });
             if (next) {
                 node.status({
@@ -100,12 +100,19 @@ module.exports = function(RED) {
          * Explicitly clear job from context
          * Called when job is cancelled or completed (non-cron)
          */
-        function clearJobsFromContext() {
+        /**
+         * Remove a specific job from context
+         */
+        function removeJobFromContext(jobId) {
             if (!node.persistent) return;
             try {
-                node.context().set('scheduled_jobs', {});
+                const saved = node.context().get('scheduled_jobs') || {};
+                if (saved[jobId]) {
+                    delete saved[jobId];
+                    node.context().set('scheduled_jobs', saved);
+                }
             } catch (err) {
-                node.error("Failed to clear context: " + err.toString());
+                node.error("Failed to update context: " + err.toString());
             }
         }
 
@@ -150,7 +157,7 @@ module.exports = function(RED) {
             jobId = jobId || (msg && msg.job_id) || 'default';
             if (!node.jobs) node.jobs = {};
             if (node.jobs[jobId]) {
-                try { node.jobs[jobId].cancel(); } catch (err) {}
+                try { node.jobs[jobId].cancel(); } catch (_err) { /* ignore */ }
                 node.jobs[jobId] = null;
                 delete node.jobs[jobId];
             }
@@ -212,7 +219,7 @@ module.exports = function(RED) {
                     // Also clear context since this job is dead
                     if (isRestoring) {
                         node.status({fill:"grey", shape:"ring", text:"past date (ignored)"});
-                        clearJobFromContext();
+                        removeJobFromContext(jobId);
                     }
                     return;
                 }
@@ -250,13 +257,7 @@ module.exports = function(RED) {
                     if (!isCron) {
                         if (node.persistent) {
                             // remove this job from persisted store
-                            try {
-                                const saved = node.context().get('scheduled_jobs') || {};
-                                delete saved[jobId];
-                                node.context().set('scheduled_jobs', saved);
-                            } catch (err) {
-                                // ignore
-                            }
+                            removeJobFromContext(jobId);
                         }
                         if (node.jobs && node.jobs[jobId]) {
                             node.jobs[jobId] = null;
@@ -307,7 +308,7 @@ module.exports = function(RED) {
         function cancelJob(jobId) {
             jobId = jobId || 'default';
             if (node.jobs && node.jobs[jobId]) {
-                try { node.jobs[jobId].cancel(); } catch (err) {}
+                try { node.jobs[jobId].cancel(); } catch (_err) { /* ignore */ }
                 node.jobs[jobId] = null;
                 delete node.jobs[jobId];
                 updateNodeStatus();
@@ -343,11 +344,11 @@ module.exports = function(RED) {
             scheduleJob(scheduleInput, msg, false, true, msg.job_id || null);
         });
 
-        node.on('close', function(removed, done) {
+        node.on('close', function(_removed, done) {
             // Cancel all jobs on close but DO NOT clear context (so it persists)
             if (node.jobs) {
                 Object.keys(node.jobs).forEach(id => {
-                    try { if (node.jobs[id]) node.jobs[id].cancel(); } catch (err) {}
+                    try { if (node.jobs[id]) node.jobs[id].cancel(); } catch (_err) { /* ignore */ }
                     node.jobs[id] = null;
                     delete node.jobs[id];
                 });

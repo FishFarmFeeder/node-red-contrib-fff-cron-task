@@ -1,6 +1,6 @@
 const helper = require("node-red-node-test-helper");
 const cronTaskNode = require("../cron-task.js");
-const should = require("should");
+require("should");
 
 helper.init(require.resolve('node-red'));
 
@@ -42,7 +42,7 @@ describe('fff-cron-task Node', function () {
                 const n3 = helper.getNode("n3");
                 
                 let errorReceived = false;
-                n3.on("input", function (msg) {
+                n3.on("input", function (_msg) {
                     errorReceived = true;
                 });
 
@@ -98,7 +98,7 @@ describe('fff-cron-task Node', function () {
                 const n3 = helper.getNode("n3");
                 
                 let errorReceived = false;
-                n3.on("input", function (msg) {
+                n3.on("input", function (_msg) {
                     errorReceived = true;
                 });
 
@@ -210,7 +210,7 @@ describe('fff-cron-task Node', function () {
                 const n2 = helper.getNode("n2");
                 
                 let triggerCount = 0;
-                n2.on("input", function (msg) {
+                n2.on("input", function (_msg) {
                     triggerCount++;
                 });
                 
