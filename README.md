@@ -48,19 +48,43 @@ A ready-to-import example flow is available at [`examples/basic-flow.json`](exam
 | `msg.date`      | Date \| string  | One-shot execution time. Must be in the future.                             |
 | `msg.inputDate` | string \| Date  | Legacy field — auto-detects cron vs date. Kept for backward compatibility.  |
 | `msg.job_id`    | string          | Optional. Defaults to `"default"`. Lets you run multiple jobs in one node.  |
-| `msg.action`    | `"cancel"`      | Cancels the job referenced by `msg.job_id`.                                 |
+| `msg.action`    | string          | Control command. See below.                                                 |
 
-Priority when more than one is set: `msg.cron` > `msg.date` > `msg.inputDate`.
+Priority when more than one schedule input is set: `msg.cron` > `msg.date` > `msg.inputDate`.
+
+### Control commands (`msg.action`)
+
+| Value         | Effect                                                                                          |
+| ------------- | ----------------------------------------------------------------------------------------------- |
+| `"cancel"`    | Stops the job referenced by `msg.job_id` (or `"default"` if omitted).                           |
+| `"cancelAll"` | Stops every active job in this node instance.                                                   |
+| `"list"`      | Emits the current job list on output 1 as `{ payload: "jobs", jobs: [...] }`. Schedules nothing. |
 
 ## Outputs
 
-**Output 1 — Triggered**
+**Output 1 — Triggered events and `list` responses**
+
+When a schedule fires:
 
 ```js
 {
   payload: "triggered",
-  original_payload: "...",  // what you scheduled
+  original_payload: "...",      // what you scheduled
   job_id: "default",
+  timestamp: 1748000000000,
+  nextInvocation: "2026-05-22T14:35:00.000Z" // null for one-shot dates after they fire
+}
+```
+
+When you send `msg.action="list"`:
+
+```js
+{
+  payload: "jobs",
+  jobs: [
+    { job_id: "a", schedule: "*/5 * * * *",       type: "cron", nextInvocation: "2026-05-22T14:35:00.000Z" },
+    { job_id: "b", schedule: "2026-12-25T10:00:00", type: "date", nextInvocation: "2026-12-25T10:00:00.000Z" }
+  ],
   timestamp: 1748000000000
 }
 ```

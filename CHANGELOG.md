@@ -7,15 +7,32 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.0.0] - 2026-05-22
+
+This is the first production-grade release. The node has been used in production
+since the `0.0.1` tag; this release locks in a stable API, ships explicit
+control commands and persistence guarantees, and is internally restructured for
+maintainability and localization.
+
 ### Added
 - `msg.cron` and `msg.date` input fields. Each forces strict validation as its respective type (cleaner than the legacy `msg.inputDate`).
 - Explicit warning in README and node help about `contextStorage` being in-memory by default — persistence only survives restarts when a filesystem store is configured.
+- `msg.action = "list"` emits the active jobs (with their next invocation) on output 1.
+- `msg.action = "cancelAll"` cancels every job in the node instance at once.
+- `nextInvocation` field in the triggered output payload (ISO-8601 string, or `null` for one-shot dates).
+- Status text now shows the active job count when more than one is scheduled (`"3 jobs · <next>"`).
+- Tests covering the explicit input fields, the new control commands, the `nextInvocation` field, and the persistence save/cleanup contract.
+- Localization with `locales/en-US/cron-task.json` and `locales/es/cron-task.json` for runtime status text and error messages. The node help text now ships with English and Spanish variants.
+- Unit tests under `test/validators_spec.js` and `test/persistence_spec.js` that cover the extracted modules without spinning up the Node-RED helper — including a real save → restore round-trip across separate node instances.
 
 ### Changed
 - README rewritten without decorative emojis, marketing-style language, or the embedded JSON example duplicated from `examples/basic-flow.json`.
 - Node help text updated to document the three input fields and the priority order (`msg.cron` > `msg.date` > `msg.inputDate`).
 - Cron-vs-date auto-detection (used only by the legacy `msg.inputDate` path) now relies on `cron-parser` and `new Date` directly instead of a chain of regex heuristics.
 - Input handler migrated to the modern Node-RED 1.0+ signature `(msg, send, done)` so the runtime gets full message lifecycle telemetry.
+- Source code split into `lib/validators.js` (pure input validation), `lib/scheduler.js` (scheduling primitives, factory closure), and `lib/persistence.js` (save/restore/remove). `cron-task.js` is now a thin orchestrator.
+- ESLint rules hardened: `eqeqeq`, `prefer-const`, `no-var`, `curly`.
+- `package.json#files` now ships `lib/` and `locales/` so the published tarball includes the new directories.
 
 ### Removed
 - Monkey-patching of `node-schedule` internals (`scheduled._scheduleInput`, `scheduled._jobId`) — replaced by a separate `node.jobMeta` map.
@@ -43,5 +60,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Weak cron validation that could accept invalid patterns
 - Missing metadata in package.json preventing npm publication
 
-[Unreleased]: https://github.com/fishfarmfeeder/node-red-contrib-fff-cron-task/compare/v0.0.1...HEAD
+[Unreleased]: https://github.com/fishfarmfeeder/node-red-contrib-fff-cron-task/compare/v1.0.0...HEAD
+[1.0.0]: https://github.com/fishfarmfeeder/node-red-contrib-fff-cron-task/compare/v0.0.1...v1.0.0
 [0.0.1]: https://github.com/fishfarmfeeder/node-red-contrib-fff-cron-task/releases/tag/v0.0.1

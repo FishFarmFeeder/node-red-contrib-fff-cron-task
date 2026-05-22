@@ -242,7 +242,7 @@ describe('fff-cron-task Node', function () {
                 const n1 = helper.getNode("n1");
                 const n2 = helper.getNode("n2");
                 
-                let triggeredJobs = [];
+                const triggeredJobs = [];
                 n2.on("input", function (msg) {
                     triggeredJobs.push(msg.job_id);
                 });
@@ -311,7 +311,7 @@ describe('fff-cron-task Node', function () {
                 const n1 = helper.getNode("n1");
                 const n2 = helper.getNode("n2");
                 
-                let triggeredJobs = [];
+                const triggeredJobs = [];
                 
                 n2.on("input", function (msg) {
                     triggeredJobs.push(msg.job_id);
@@ -370,18 +370,18 @@ describe('fff-cron-task Node', function () {
     // Timezone support removed in favor of the Node-RED runtime timezone.
 
     describe('Missing Input', function() {
-        
+
         it('should send error when no inputDate provided', function (done) {
             const flow = [
                 { id: "n1", type: "fff-cron-task", name: "test", wires: [["n2"], ["n3"]] },
                 { id: "n2", type: "helper" },
                 { id: "n3", type: "helper" }
             ];
-            
+
             helper.load(cronTaskNode, flow, function () {
                 const n1 = helper.getNode("n1");
                 const n3 = helper.getNode("n3");
-                
+
                 n3.on("input", function (msg) {
                     try {
                         msg.should.have.property('error');
@@ -394,6 +394,327 @@ describe('fff-cron-task Node', function () {
 
                 // Send message without inputDate
                 n1.receive({ payload: "test" });
+            });
+        });
+    });
+
+    describe('Explicit input fields (msg.cron / msg.date)', function () {
+
+        it('should schedule from msg.cron', function (done) {
+            const flow = [
+                { id: "n1", type: "fff-cron-task", name: "test", wires: [["n2"], ["n3"]] },
+                { id: "n2", type: "helper" },
+                { id: "n3", type: "helper" }
+            ];
+            helper.load(cronTaskNode, flow, function () {
+                const n1 = helper.getNode("n1");
+                const n3 = helper.getNode("n3");
+                let errored = false;
+                n3.on("input", function () { errored = true; });
+
+                n1.receive({ cron: "*/5 * * * * *" });
+
+                setTimeout(function () {
+                    try {
+                        errored.should.equal(false);
+                        Object.keys(n1.jobs).length.should.equal(1);
+                        n1.jobMeta.default.type.should.equal('cron');
+                        done();
+                    } catch (err) { done(err); }
+                }, 150);
+            });
+        });
+
+        it('should reject an invalid msg.cron with InvalidCron error', function (done) {
+            const flow = [
+                { id: "n1", type: "fff-cron-task", name: "test", wires: [["n2"], ["n3"]] },
+                { id: "n2", type: "helper" },
+                { id: "n3", type: "helper" }
+            ];
+            helper.load(cronTaskNode, flow, function () {
+                const n1 = helper.getNode("n1");
+                const n3 = helper.getNode("n3");
+
+                n3.on("input", function (msg) {
+                    try {
+                        msg.error.should.have.property('type', 'InvalidCron');
+                        done();
+                    } catch (err) { done(err); }
+                });
+
+                // A string that would be a valid Date but explicit msg.cron must reject it
+                n1.receive({ cron: "2099-12-31T10:00:00Z" });
+            });
+        });
+
+        it('should schedule from msg.date', function (done) {
+            const flow = [
+                { id: "n1", type: "fff-cron-task", name: "test", wires: [["n2"], ["n3"]] },
+                { id: "n2", type: "helper" },
+                { id: "n3", type: "helper" }
+            ];
+            helper.load(cronTaskNode, flow, function () {
+                const n1 = helper.getNode("n1");
+                const n3 = helper.getNode("n3");
+                let errored = false;
+                n3.on("input", function () { errored = true; });
+
+                n1.receive({ date: new Date(Date.now() + 60000) });
+
+                setTimeout(function () {
+                    try {
+                        errored.should.equal(false);
+                        n1.jobMeta.default.type.should.equal('date');
+                        done();
+                    } catch (err) { done(err); }
+                }, 150);
+            });
+        });
+
+        it('should reject an invalid msg.date with InvalidDate error', function (done) {
+            const flow = [
+                { id: "n1", type: "fff-cron-task", name: "test", wires: [["n2"], ["n3"]] },
+                { id: "n2", type: "helper" },
+                { id: "n3", type: "helper" }
+            ];
+            helper.load(cronTaskNode, flow, function () {
+                const n1 = helper.getNode("n1");
+                const n3 = helper.getNode("n3");
+
+                n3.on("input", function (msg) {
+                    try {
+                        msg.error.should.have.property('type', 'InvalidDate');
+                        done();
+                    } catch (err) { done(err); }
+                });
+
+                // Garbage that Date() cannot parse — explicit msg.date must reject it
+                n1.receive({ date: "definitely-not-a-date-xyz" });
+            });
+        });
+
+        it('should prefer msg.cron over msg.date and msg.inputDate', function (done) {
+            const flow = [
+                { id: "n1", type: "fff-cron-task", name: "test", wires: [["n2"], ["n3"]] },
+                { id: "n2", type: "helper" },
+                { id: "n3", type: "helper" }
+            ];
+            helper.load(cronTaskNode, flow, function () {
+                const n1 = helper.getNode("n1");
+                n1.receive({
+                    cron: "*/5 * * * * *",
+                    date: new Date(Date.now() + 60000),
+                    inputDate: new Date(Date.now() + 120000)
+                });
+                setTimeout(function () {
+                    try {
+                        n1.jobMeta.default.type.should.equal('cron');
+                        n1.jobMeta.default.scheduleInput.should.equal("*/5 * * * * *");
+                        done();
+                    } catch (err) { done(err); }
+                }, 150);
+            });
+        });
+    });
+
+    describe('List action', function () {
+
+        it('should emit active jobs on msg.action=list', function (done) {
+            const flow = [
+                { id: "n1", type: "fff-cron-task", name: "test", wires: [["n2"], ["n3"]] },
+                { id: "n2", type: "helper" },
+                { id: "n3", type: "helper" }
+            ];
+            helper.load(cronTaskNode, flow, function () {
+                const n1 = helper.getNode("n1");
+                const n2 = helper.getNode("n2");
+
+                n2.on("input", function (msg) {
+                    if (msg.payload !== 'jobs') {return;}
+                    try {
+                        msg.should.have.property('jobs');
+                        msg.jobs.should.be.an.Array();
+                        msg.jobs.length.should.equal(2);
+                        const ids = msg.jobs.map(function (j) { return j.job_id; });
+                        ids.should.containEql('a');
+                        ids.should.containEql('b');
+                        msg.jobs.forEach(function (j) {
+                            j.should.have.property('schedule');
+                            j.should.have.property('type');
+                            j.should.have.property('nextInvocation');
+                        });
+                        done();
+                    } catch (err) { done(err); }
+                });
+
+                n1.receive({ cron: "*/10 * * * *", job_id: 'a' });
+                n1.receive({ date: new Date(Date.now() + 30000), job_id: 'b' });
+                setTimeout(function () { n1.receive({ action: 'list' }); }, 100);
+            });
+        });
+
+        it('should emit an empty jobs array when nothing is scheduled', function (done) {
+            const flow = [
+                { id: "n1", type: "fff-cron-task", name: "test", wires: [["n2"], ["n3"]] },
+                { id: "n2", type: "helper" },
+                { id: "n3", type: "helper" }
+            ];
+            helper.load(cronTaskNode, flow, function () {
+                const n1 = helper.getNode("n1");
+                const n2 = helper.getNode("n2");
+
+                n2.on("input", function (msg) {
+                    try {
+                        msg.payload.should.equal('jobs');
+                        msg.jobs.should.be.an.Array().and.have.length(0);
+                        done();
+                    } catch (err) { done(err); }
+                });
+
+                n1.receive({ action: 'list' });
+            });
+        });
+    });
+
+    describe('CancelAll action', function () {
+
+        it('should cancel every active job', function (done) {
+            this.timeout(5000);
+            const flow = [
+                { id: "n1", type: "fff-cron-task", name: "test", wires: [["n2"], ["n3"]] },
+                { id: "n2", type: "helper" },
+                { id: "n3", type: "helper" }
+            ];
+            helper.load(cronTaskNode, flow, function () {
+                const n1 = helper.getNode("n1");
+                const n2 = helper.getNode("n2");
+                let triggered = 0;
+                n2.on("input", function () { triggered++; });
+
+                n1.receive({ date: new Date(Date.now() + 1200), job_id: 'one' });
+                n1.receive({ date: new Date(Date.now() + 1400), job_id: 'two' });
+
+                setTimeout(function () {
+                    n1.receive({ action: 'cancelAll' });
+                    try {
+                        Object.keys(n1.jobs).length.should.equal(0);
+                        Object.keys(n1.jobMeta).length.should.equal(0);
+                    } catch (err) { return done(err); }
+
+                    setTimeout(function () {
+                        try {
+                            triggered.should.equal(0);
+                            done();
+                        } catch (err) { done(err); }
+                    }, 2000);
+                }, 200);
+            });
+        });
+    });
+
+    describe('nextInvocation in triggered payload', function () {
+
+        it('should include an ISO nextInvocation for cron jobs', function (done) {
+            this.timeout(3000);
+            const flow = [
+                { id: "n1", type: "fff-cron-task", name: "test", wires: [["n2"], ["n3"]] },
+                { id: "n2", type: "helper" },
+                { id: "n3", type: "helper" }
+            ];
+            helper.load(cronTaskNode, flow, function () {
+                const n1 = helper.getNode("n1");
+                const n2 = helper.getNode("n2");
+
+                n2.on("input", function (msg) {
+                    if (msg.payload !== 'triggered') {return;}
+                    try {
+                        msg.should.have.property('nextInvocation');
+                        msg.nextInvocation.should.be.a.String();
+                        const next = new Date(msg.nextInvocation);
+                        isNaN(next.getTime()).should.equal(false);
+                        next.getTime().should.be.greaterThan(Date.now());
+                        done();
+                    } catch (err) { done(err); }
+                });
+
+                n1.receive({ cron: "*/1 * * * * *" });
+            });
+        });
+
+        it('should set nextInvocation to null for one-shot dates', function (done) {
+            this.timeout(3000);
+            const flow = [
+                { id: "n1", type: "fff-cron-task", name: "test", wires: [["n2"], ["n3"]] },
+                { id: "n2", type: "helper" },
+                { id: "n3", type: "helper" }
+            ];
+            helper.load(cronTaskNode, flow, function () {
+                const n1 = helper.getNode("n1");
+                const n2 = helper.getNode("n2");
+
+                n2.on("input", function (msg) {
+                    if (msg.payload !== 'triggered') {return;}
+                    try {
+                        msg.should.have.property('nextInvocation');
+                        (msg.nextInvocation === null).should.equal(true);
+                        done();
+                    } catch (err) { done(err); }
+                });
+
+                n1.receive({ date: new Date(Date.now() + 1200) });
+            });
+        });
+    });
+
+    describe('Persistence (format)', function () {
+
+        it('should save jobs with the structure expected by restore', function (done) {
+            const flow = [
+                { id: "n1", type: "fff-cron-task", name: "test", persistent: true, wires: [["n2"], ["n3"]] },
+                { id: "n2", type: "helper" },
+                { id: "n3", type: "helper" }
+            ];
+            helper.load(cronTaskNode, flow, function () {
+                const n1 = helper.getNode("n1");
+
+                const cron = "*/5 * * * *";
+                n1.receive({ cron, job_id: 'persist_cron' });
+
+                setTimeout(function () {
+                    try {
+                        const saved = n1.context().get('scheduled_jobs');
+                        saved.should.have.property('persist_cron');
+                        saved.persist_cron.should.have.property('scheduleInput', cron);
+                        // Only scheduleInput should be persisted — nothing more, nothing less
+                        Object.keys(saved.persist_cron).should.eql(['scheduleInput']);
+                        done();
+                    } catch (err) { done(err); }
+                }, 200);
+            });
+        });
+
+        it('should drop a job from context when cancelled', function (done) {
+            const flow = [
+                { id: "n1", type: "fff-cron-task", name: "test", persistent: true, wires: [["n2"], ["n3"]] },
+                { id: "n2", type: "helper" },
+                { id: "n3", type: "helper" }
+            ];
+            helper.load(cronTaskNode, flow, function () {
+                const n1 = helper.getNode("n1");
+                n1.receive({ cron: "*/5 * * * *", job_id: 'drop_me' });
+
+                setTimeout(function () {
+                    n1.context().get('scheduled_jobs').should.have.property('drop_me');
+                    n1.receive({ action: 'cancel', job_id: 'drop_me' });
+
+                    setTimeout(function () {
+                        try {
+                            const saved = n1.context().get('scheduled_jobs') || {};
+                            saved.should.not.have.property('drop_me');
+                            done();
+                        } catch (err) { done(err); }
+                    }, 100);
+                }, 150);
             });
         });
     });

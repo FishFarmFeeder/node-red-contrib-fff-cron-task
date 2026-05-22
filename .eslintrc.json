@@ -17,6 +17,10 @@
         "argsIgnorePattern": "^_"
       }
     ],
-    "no-console": "off"
+    "no-console": "off",
+    "eqeqeq": ["error", "always"],
+    "prefer-const": "error",
+    "no-var": "error",
+    "curly": ["error", "all"]
   }
 }
