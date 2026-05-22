@@ -51,17 +51,25 @@
         <dd>Identifies the job inside this node instance. Defaults to <code>"default"</code>. Use different ids to run multiple jobs in parallel.</dd>
 
         <dt class="optional">msg.action <span class="property-type">string</span></dt>
-        <dd>Set to <code>"cancel"</code> to stop the job referenced by <code>msg.job_id</code>.</dd>
+        <dd>
+            Control command. One of:
+            <ul>
+                <li><code>"cancel"</code> — stops the job referenced by <code>msg.job_id</code> (or <code>"default"</code> if omitted).</li>
+                <li><code>"cancelAll"</code> — stops every active job in this node instance.</li>
+                <li><code>"list"</code> — emits the current job list on output 1 (see below). Does not schedule anything.</li>
+            </ul>
+        </dd>
     </dl>
 
     <p>If more than one of <code>msg.cron</code>, <code>msg.date</code> or <code>msg.inputDate</code> is set, the priority is: <code>msg.cron</code> &gt; <code>msg.date</code> &gt; <code>msg.inputDate</code>.</p>
 
     <h3>Outputs</h3>
     <ol class="node-ports">
-        <li>Triggered events
+        <li>Triggered events and <code>list</code> responses
+            <p>When a schedule fires:</p>
             <dl class="message-properties">
                 <dt>payload <span class="property-type">string</span></dt>
-                <dd>Always <code>"triggered"</code> when the schedule fires.</dd>
+                <dd>Always <code>"triggered"</code>.</dd>
 
                 <dt>original_payload <span class="property-type">string | Date</span></dt>
                 <dd>The original schedule input that fired.</dd>
@@ -71,6 +79,17 @@
 
                 <dt>timestamp <span class="property-type">number</span></dt>
                 <dd>Epoch milliseconds at fire time.</dd>
+
+                <dt>nextInvocation <span class="property-type">string | null</span></dt>
+                <dd>ISO-8601 timestamp of the next scheduled run. <code>null</code> for one-shot dates after they fire.</dd>
+            </dl>
+            <p>When <code>msg.action="list"</code> is received:</p>
+            <dl class="message-properties">
+                <dt>payload <span class="property-type">string</span></dt>
+                <dd>Always <code>"jobs"</code>.</dd>
+
+                <dt>jobs <span class="property-type">array</span></dt>
+                <dd>One entry per active job: <code>{ job_id, schedule, type, nextInvocation }</code>.</dd>
             </dl>
         </li>
         <li>Errors

@@ -96,10 +96,48 @@ module.exports = function (RED) {
             }
 
             if (next) {
-                node.status({ fill: 'blue', shape: 'dot', text: next.toLocaleString() });
+                const text = jobIds.length > 1
+                    ? `${jobIds.length} jobs · ${next.toLocaleString()}`
+                    : next.toLocaleString();
+                node.status({ fill: 'blue', shape: 'dot', text });
             } else {
                 node.status({ fill: 'grey', shape: 'ring', text: 'completed' });
             }
+        }
+
+        function getNextInvocationIso(jobId) {
+            try {
+                const j = node.jobs[jobId];
+                if (j && typeof j.nextInvocation === 'function') {
+                    const n = j.nextInvocation();
+                    if (n) return n.toISOString();
+                }
+            } catch (_err) { /* ignore */ }
+            return null;
+        }
+
+        function listJobs() {
+            const out = [];
+            for (const id of Object.keys(node.jobs)) {
+                const meta = node.jobMeta[id] || {};
+                out.push({
+                    job_id: id,
+                    schedule: meta.scheduleInput,
+                    type: meta.type || null,
+                    nextInvocation: getNextInvocationIso(id)
+                });
+            }
+            return out;
+        }
+
+        function cancelAllJobs() {
+            for (const id of Object.keys(node.jobs)) {
+                try { if (node.jobs[id]) node.jobs[id].cancel(); } catch (_err) { /* ignore */ }
+                delete node.jobs[id];
+                delete node.jobMeta[id];
+            }
+            updateNodeStatus();
+            saveJobsToContext();
         }
 
         function saveJobsToContext() {
@@ -212,7 +250,8 @@ module.exports = function (RED) {
                         payload: 'triggered',
                         original_payload: scheduleInput,
                         job_id: jobId,
-                        timestamp: Date.now()
+                        timestamp: Date.now(),
+                        nextInvocation: getNextInvocationIso(jobId)
                     }, null]);
 
                     node.status({ fill: 'green', shape: 'dot', text: 'triggered' });
@@ -276,6 +315,22 @@ module.exports = function (RED) {
 
             if (msg.action === 'cancel') {
                 cancelJob(msg.job_id);
+                done();
+                return;
+            }
+
+            if (msg.action === 'cancelAll') {
+                cancelAllJobs();
+                done();
+                return;
+            }
+
+            if (msg.action === 'list') {
+                send([{
+                    payload: 'jobs',
+                    jobs: listJobs(),
+                    timestamp: Date.now()
+                }, null]);
                 done();
                 return;
             }

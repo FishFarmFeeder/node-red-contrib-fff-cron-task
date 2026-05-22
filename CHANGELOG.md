@@ -10,6 +10,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Added
 - `msg.cron` and `msg.date` input fields. Each forces strict validation as its respective type (cleaner than the legacy `msg.inputDate`).
 - Explicit warning in README and node help about `contextStorage` being in-memory by default — persistence only survives restarts when a filesystem store is configured.
+- `msg.action = "list"` emits the active jobs (with their next invocation) on output 1.
+- `msg.action = "cancelAll"` cancels every job in the node instance at once.
+- `nextInvocation` field in the triggered output payload (ISO-8601 string, or `null` for one-shot dates).
+- Status text now shows the active job count when more than one is scheduled (`"3 jobs · <next>"`).
+- Tests covering the explicit input fields, the new control commands, the `nextInvocation` field, and the persistence save/cleanup contract.
 
 ### Changed
 - README rewritten without decorative emojis, marketing-style language, or the embedded JSON example duplicated from `examples/basic-flow.json`.
