@@ -1,0 +1,24 @@
+{
+    "cron-task": {
+        "status": {
+            "no_job": "sin tareas",
+            "completed": "completado",
+            "triggered": "disparado",
+            "invalid_cron": "cron inválido",
+            "invalid_date": "fecha inválida",
+            "schedule_failed": "falló el agendado",
+            "error": "error",
+            "past_date_ignored": "fecha pasada (ignorada)",
+            "n_jobs_next": "__count__ tareas · __next__"
+        },
+        "errors": {
+            "invalid_cron": "Cron inválido: __input__",
+            "invalid_date": "Formato de fecha inválido: __input__",
+            "invalid_input": "Entrada de programación inválida: __input__",
+            "past_date": "La fecha debe ser futura: __input__",
+            "schedule_failed": "No se pudo agendar la tarea: __input__",
+            "schedule_error": "Error al agendar: __message__",
+            "missing_input": "Falta el input de programación (msg.cron, msg.date o msg.inputDate)"
+        }
+    }
+}

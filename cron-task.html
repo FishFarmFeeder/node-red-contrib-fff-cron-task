@@ -109,3 +109,86 @@
     default: { module: "localfilesystem" }
 }</pre>
 </script>
+
+<script type="text/html" data-help-name="fff-cron-task" data-lang="es">
+    <p>Programa tareas únicas o recurrentes usando una <code>Date</code> o una expresión cron. Soporta múltiples jobs independientes por nodo y persistencia opcional entre reinicios.</p>
+
+    <h3>Configuración</h3>
+    <dl class="message-properties">
+        <dt>Persistent <span class="property-type">boolean</span></dt>
+        <dd>Si está activado, los jobs se guardan en el contexto del nodo y se restauran al redeployar o reiniciar. Ver nota de Persistencia más abajo.</dd>
+    </dl>
+
+    <h3>Entradas</h3>
+    <dl class="message-properties">
+        <dt>msg.cron <span class="property-type">string</span></dt>
+        <dd>Expresión cron de 5 o 6 campos (ej: <code>"*/10 * * * *"</code>). Cuando se setea, la entrada se valida estrictamente como cron.</dd>
+
+        <dt>msg.date <span class="property-type">Date | string</span></dt>
+        <dd>Ejecución única. Debe ser una fecha futura. Cuando se setea, la entrada se valida estrictamente como fecha.</dd>
+
+        <dt>msg.inputDate <span class="property-type">string | Date</span></dt>
+        <dd>Campo legacy. Acepta cron o fecha y auto-detecta. Se mantiene por compatibilidad — preferí <code>msg.cron</code> o <code>msg.date</code> en flows nuevos.</dd>
+
+        <dt class="optional">msg.job_id <span class="property-type">string</span></dt>
+        <dd>Identifica el job dentro del nodo. Default: <code>"default"</code>. Usá ids distintos para correr varios jobs en paralelo.</dd>
+
+        <dt class="optional">msg.action <span class="property-type">string</span></dt>
+        <dd>
+            Comando de control. Uno de:
+            <ul>
+                <li><code>"cancel"</code> — detiene el job referenciado por <code>msg.job_id</code>.</li>
+                <li><code>"cancelAll"</code> — detiene todos los jobs activos.</li>
+                <li><code>"list"</code> — emite la lista de jobs activos por la salida 1.</li>
+            </ul>
+        </dd>
+    </dl>
+
+    <p>Si hay más de uno de <code>msg.cron</code>, <code>msg.date</code> o <code>msg.inputDate</code>, la prioridad es: <code>msg.cron</code> &gt; <code>msg.date</code> &gt; <code>msg.inputDate</code>.</p>
+
+    <h3>Salidas</h3>
+    <ol class="node-ports">
+        <li>Disparos y respuestas a <code>list</code>
+            <p>Cuando un schedule dispara:</p>
+            <dl class="message-properties">
+                <dt>payload <span class="property-type">string</span></dt>
+                <dd>Siempre <code>"triggered"</code>.</dd>
+
+                <dt>original_payload <span class="property-type">string | Date</span></dt>
+                <dd>El input original que disparó.</dd>
+
+                <dt>job_id <span class="property-type">string</span></dt>
+                <dd>El id del job que disparó.</dd>
+
+                <dt>timestamp <span class="property-type">number</span></dt>
+                <dd>Milisegundos epoch al momento del disparo.</dd>
+
+                <dt>nextInvocation <span class="property-type">string | null</span></dt>
+                <dd>Próxima ejecución en ISO-8601, o <code>null</code> para fechas únicas ya disparadas.</dd>
+            </dl>
+            <p>Cuando se recibe <code>msg.action="list"</code>:</p>
+            <dl class="message-properties">
+                <dt>payload <span class="property-type">string</span></dt>
+                <dd>Siempre <code>"jobs"</code>.</dd>
+
+                <dt>jobs <span class="property-type">array</span></dt>
+                <dd>Una entrada por job activo: <code>{ job_id, schedule, type, nextInvocation }</code>.</dd>
+            </dl>
+        </li>
+        <li>Errores
+            <dl class="message-properties">
+                <dt>payload <span class="property-type">string</span></dt>
+                <dd>Mensaje de error legible.</dd>
+
+                <dt>error <span class="property-type">object</span></dt>
+                <dd>Objeto con campo <code>type</code>. Valores: <code>MissingInput</code>, <code>InvalidCron</code>, <code>InvalidDate</code>, <code>PastDate</code>, <code>ScheduleFailed</code>, <code>ScheduleError</code>.</dd>
+            </dl>
+        </li>
+    </ol>
+
+    <h3>Persistencia</h3>
+    <p>Cuando <b>Persistent</b> está activo, los jobs se escriben en el contexto del nodo bajo la clave <code>scheduled_jobs</code> y se restauran al reiniciar o redeployar. <b>Importante:</b> por defecto Node-RED guarda el contexto en memoria, así que los jobs se pierden en un reinicio real del proceso. Para sobrevivir reinicios, configurá un store de filesystem en <code>settings.js</code>:</p>
+    <pre>contextStorage: {
+    default: { module: "localfilesystem" }
+}</pre>
+</script>

@@ -43,6 +43,8 @@
     "files": [
         "cron-task.js",
         "cron-task.html",
+        "lib/",
+        "locales/",
         "README.md",
         "LICENSE",
         "CHANGELOG.md",

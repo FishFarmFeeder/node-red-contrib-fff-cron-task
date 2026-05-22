@@ -1,0 +1,24 @@
+{
+    "cron-task": {
+        "status": {
+            "no_job": "no job",
+            "completed": "completed",
+            "triggered": "triggered",
+            "invalid_cron": "invalid cron",
+            "invalid_date": "invalid date",
+            "schedule_failed": "schedule failed",
+            "error": "error",
+            "past_date_ignored": "past date (ignored)",
+            "n_jobs_next": "__count__ jobs · __next__"
+        },
+        "errors": {
+            "invalid_cron": "Invalid cron string: __input__",
+            "invalid_date": "Invalid date format: __input__",
+            "invalid_input": "Invalid schedule input: __input__",
+            "past_date": "Date must be in the future: __input__",
+            "schedule_failed": "Failed to schedule job: __input__",
+            "schedule_error": "Error scheduling job: __message__",
+            "missing_input": "No schedule input provided (msg.cron, msg.date or msg.inputDate)"
+        }
+    }
+}
