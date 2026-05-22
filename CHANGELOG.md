@@ -7,6 +7,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+- `msg.cron` and `msg.date` input fields. Each forces strict validation as its respective type (cleaner than the legacy `msg.inputDate`).
+- Explicit warning in README and node help about `contextStorage` being in-memory by default — persistence only survives restarts when a filesystem store is configured.
+
+### Changed
+- README rewritten without decorative emojis, marketing-style language, or the embedded JSON example duplicated from `examples/basic-flow.json`.
+- Node help text updated to document the three input fields and the priority order (`msg.cron` > `msg.date` > `msg.inputDate`).
+- Cron-vs-date auto-detection (used only by the legacy `msg.inputDate` path) now relies on `cron-parser` and `new Date` directly instead of a chain of regex heuristics.
+- Input handler migrated to the modern Node-RED 1.0+ signature `(msg, send, done)` so the runtime gets full message lifecycle telemetry.
+
+### Removed
+- Monkey-patching of `node-schedule` internals (`scheduled._scheduleInput`, `scheduled._jobId`) — replaced by a separate `node.jobMeta` map.
+
+### Fixed
+- Fragile fallback in input detection that defaulted any non-cron, non-date string to "cron".
+
 ## [0.0.1] - 2025-11-28
 
 ### Added

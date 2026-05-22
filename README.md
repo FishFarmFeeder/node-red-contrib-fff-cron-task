@@ -1,277 +1,135 @@
 # node-red-contrib-fff-cron-task
 
 [![npm version](https://img.shields.io/npm/v/node-red-contrib-fff-cron-task.svg)](https://www.npmjs.com/package/node-red-contrib-fff-cron-task)
+[![CI](https://github.com/fishfarmfeeder/node-red-contrib-fff-cron-task/actions/workflows/ci.yml/badge.svg)](https://github.com/fishfarmfeeder/node-red-contrib-fff-cron-task/actions/workflows/ci.yml)
 [![License: ISC](https://img.shields.io/badge/License-ISC-blue.svg)](https://opensource.org/licenses/ISC)
 
-A robust Node-RED node for scheduling tasks using specific Dates or Cron patterns with persistence support.
+A Node-RED node to schedule one-shot or recurring tasks using a Date or a cron expression. Supports multiple independent jobs in one node and optional persistence across restarts.
 
-## ✨ Features
+## Install
 
-- 📅 **Flexible Scheduling**: Use Date objects, date strings, or Cron patterns
-- ✅ **Robust Validation**: Powered by `cron-parser` for accurate cron validation
-- 🚨 **Error Handling**: Dedicated error output port for better flow control
-- 💾 **Persistence**: Optional saving of job across Node-RED restarts
-- 📊 **Status Indicators**: Visual feedback on job status and next execution
-- 🧪 **Well Tested**: Comprehensive test suite included
-
-## 📦 Installation
-
-To install from npm:
-
-```powershell
-cd %HOMEPATH%\.node-red
+```bash
+cd ~/.node-red
 npm install node-red-contrib-fff-cron-task
 ```
 
-After restarting Node-RED, you will find the node under **function** category with the label **cron-task**.
+On Windows replace the first line with `cd %HOMEPATH%\.node-red`.
 
-## ⚙️ Configuration
+After restarting Node-RED, drag **cron-task** from the *function* category onto your flow.
 
-Configure the node through the editor:
+## Quick start
 
-| Field | Type | Description | Default |
-|-------|------|-------------|---------|
-| `name` | string | Label visible in the editor | `""` |
-| `persistent` | boolean | Save job across restarts | `false` |
+Wire an inject (or function) node in front and set one of:
 
-## 📥 Input
+```js
+// recurring
+msg.cron = "*/5 * * * *";   // every 5 minutes
 
-Control the node by sending messages with these properties:
+// or one-shot
+msg.date = new Date(Date.now() + 60_000); // one minute from now
+```
 
-### Schedule a Task
+Output 1 fires when the schedule triggers. Output 2 emits errors.
 
-- **`msg.inputDate`** (required): Schedule definition
-  - Date object or date string (e.g., `"2025-12-25 10:00:00"`) for one-time execution
-  - Cron string (e.g., `"*/10 * * * * *"`) for recurring execution
-  - **Note:** Dates must be in the future
+A ready-to-import example flow is available at [`examples/basic-flow.json`](examples/basic-flow.json).
 
-### Cancel a Task
+## Configuration
 
-- **`msg.action`**: Set to `"cancel"` to stop the scheduled task
- - **`msg.job_id`**: Optional Job identifier to schedule multiple jobs in the same node (default is `"default"`)
+| Field        | Type    | Default | Description                                |
+| ------------ | ------- | ------- | ------------------------------------------ |
+| `name`       | string  | `""`    | Label shown in the editor                  |
+| `persistent` | boolean | `false` | Survive restarts/redeploys (see Persistence) |
 
-> **Note:** Multiple jobs are supported; if you send `msg.job_id` the node will manage multiple schedules at the same time. If you do not supply `msg.job_id`, the node will use a `"default"` job id and that single job will be replaced when a new schedule is sent.
+## Inputs
 
-## 📤 Outputs
+| Property        | Type            | Description                                                                 |
+| --------------- | --------------- | --------------------------------------------------------------------------- |
+| `msg.cron`      | string          | Cron expression (5 or 6 fields). Validated strictly.                        |
+| `msg.date`      | Date \| string  | One-shot execution time. Must be in the future.                             |
+| `msg.inputDate` | string \| Date  | Legacy field — auto-detects cron vs date. Kept for backward compatibility.  |
+| `msg.job_id`    | string          | Optional. Defaults to `"default"`. Lets you run multiple jobs in one node.  |
+| `msg.action`    | `"cancel"`      | Cancels the job referenced by `msg.job_id`.                                 |
 
-The node has **2 output ports**:
+Priority when more than one is set: `msg.cron` > `msg.date` > `msg.inputDate`.
 
-### Output 1: Triggered Events
+## Outputs
 
-Messages sent when a schedule fires:
+**Output 1 — Triggered**
 
-```javascript
+```js
 {
   payload: "triggered",
-  original_payload: "...",      // Original schedule input
-  job_id: "default",            // job id of the fired job
-  timestamp: 1234567890         // Execution timestamp (ms)
+  original_payload: "...",  // what you scheduled
+  job_id: "default",
+  timestamp: 1748000000000
+}
+```
+
+**Output 2 — Errors**
+
+```js
+{
+  payload: "Invalid cron string: foo",
+  error: {
+    type: "InvalidCron", // MissingInput | InvalidCron | InvalidDate | PastDate | ScheduleFailed | ScheduleError
+    input: "foo"
+  }
 }
 ```
 
 ## Persistence
 
-When `persistent` is enabled, scheduled jobs are saved in Node-RED node context under the key `scheduled_jobs`. The object maps `job_id` to the schedule input and is restored automatically on node restart or redeploy.
+When **Persistent** is on, jobs are saved to the node context under the key `scheduled_jobs` and restored automatically.
 
-### Output 2: Errors
+> **Important — context backend matters.** Node-RED stores context **in memory** by default, so jobs are lost on a real process restart even with persistence enabled. To survive restarts, configure a filesystem store in `settings.js`:
+>
+> ```js
+> contextStorage: {
+>   default: { module: "localfilesystem" }
+> }
+> ```
+>
+> Without it, "persistent" only survives redeploys (not process restarts).
 
-Messages sent when validation fails or errors occur:
+## Cron syntax
 
-```javascript
-{
-  payload: "Error description",
-  error: {
-    type: "InvalidCron",        // Error type
-    input: "invalid input",     // What caused the error
-    // ... additional context
-  }
-}
-```
-
-**Error Types:**
-- `MissingInput`: No `msg.inputDate` provided
-- `InvalidDate`: Date string could not be parsed
-- `PastDate`: Date is not in the future
-- `InvalidCron`: Cron string is malformed
-- `ScheduleFailed`: Scheduling failed  
-- `ScheduleError`: Exception during scheduling
-
-## 📚 Examples
-
-### Basic: Schedule a Future Date
-
-```javascript
-msg.inputDate = new Date(Date.now() + 60000); // 1 minute from now
-return msg;
-```
-
-### Recurring Cron Task
-
-```javascript
-// Every 5 minutes
-msg.inputDate = "*/5 * * * *";
-return msg;
-```
-
-### Cancel a Task
-
-```javascript
-msg.action = "cancel";
-return msg;
-```
-
-### Example Flow
-
-Import this flow to see the node in action:
-
-```json
-[
-    {
-        "id": "inject-future",
-        "type": "inject",
-        "name": "Future Date (+5s)",
-        "props": [{"p": "payload"}],
-        "repeat": "",
-        "crontab": "",
-        "once": false,
-        "onceDelay": 0.1,
-        "topic": "",
-        "payload": "",
-        "payloadType": "date",
-        "wires": [["function-add-5s"]]
-    },
-    {
-        "id": "function-add-5s",
-        "type": "function",
-        "name": "Add 5s",
-        "func": "var date = new Date(msg.payload);\ndate.setSeconds(date.getSeconds() + 5);\nmsg.inputDate = date;\nreturn msg;",
-        "outputs": 1,
-        "wires": [["cron-task"]]
-    },
-    {
-        "id": "inject-cron",
-        "type": "inject",
-        "name": "Cron (Every 5s)",
-        "props": [{"p": "inputDate", "v": "*/5 * * * * *", "vt": "str"}],
-        "repeat": "",
-        "crontab": "",
-        "once": false,
-        "topic": "",
-        "wires": [["cron-task"]]
-    },
-    {
-        "id": "inject-cancel",
-        "type": "inject",
-        "name": "Cancel",
-        "props": [{"p": "action", "v": "cancel", "vt": "str"}],
-        "repeat": "",
-        "topic": "",
-        "wires": [["cron-task"]]
-    },
-    {
-        "id": "cron-task",
-        "type": "fff-cron-task",
-        "name": "My Scheduler",
-        "persistent": false,
-        "wires": [["debug-success"], ["debug-error"]]
-    },
-    {
-        "id": "debug-success",
-        "type": "debug",
-        "name": "Success",
-        "active": true,
-        "tosidebar": true,
-        "console": false,
-        "tostatus": false,
-        "complete": "true",
-        "targetType": "full"
-    },
-    {
-        "id": "debug-error",
-        "type": "debug",
-        "name": "Errors",
-        "active": true,
-        "tosidebar": true,
-        "console": false,
-        "tostatus": false,
-        "complete": "true",
-        "targetType": "full"
-    }
-]
-```
-
-## 🕐 Cron Syntax
-
-The node supports standard cron syntax (validated by `cron-parser`):
+Standard 5 or 6-field cron, validated by [`cron-parser`](https://www.npmjs.com/package/cron-parser):
 
 ```
 *    *    *    *    *    *
-┬    ┬    ┬    ┬    ┬    ┬
-│    │    │    │    │    │
-│    │    │    │    │    └ day of week (0 - 7) (0 or 7 is Sun)
-│    │    │    └───────── month (1 - 12)
-│    │    └────────────── day of month (1 - 31)
-│    └─────────────────── hour (0 - 23)
-│    └──────────────────── minute (0 - 59)
-└───────────────────────── second (0 - 59, optional)
+|    |    |    |    |    |
+|    |    |    |    |    +-- day of week (0-7, 0 and 7 are Sun)
+|    |    |    |    +------- month (1-12)
+|    |    |    +------------ day of month (1-31)
+|    |    +----------------- hour (0-23)
+|    +---------------------- minute (0-59)
++--------------------------- second (0-59, optional)
 ```
 
-**Common Examples:**
-- `0 0 * * *` - Daily at midnight
-- `0 */6 * * *` - Every 6 hours
-- `*/30 * * * * *` - Every 30 seconds
-- `0 0 1 * *` - First day of every month at midnight
+Examples:
 
-## 🔍 Troubleshooting
+- `0 0 * * *` — daily at midnight
+- `0 */6 * * *` — every 6 hours
+- `*/30 * * * * *` — every 30 seconds (6-field form)
+- `0 0 1 * *` — first day of every month at midnight
 
-### Job not triggering after restart
+## Troubleshooting
 
-**Solution:** Enable the "Persistent" option in node configuration to save the job across restarts.
+- **Job disappears after restart even with `persistent: true`** — your context store is in-memory. See [Persistence](#persistence).
+- **Cron rejected** — `cron-parser` is strict. Test your expression at [crontab.guru](https://crontab.guru/) first.
+- **Two schedules clash inside one node** — pass distinct `msg.job_id` values to keep them independent. Reusing the same id replaces the previous job.
 
-### Cron validation errors
-
-**Issue:** Your cron string is rejected.  
-**Solution:** Use the cron syntax reference above. The node uses `cron-parser` for validation, which is strict about format.
-
-### Task gets replaced
-
-**Issue:** Previous task disappears when scheduling a new one.  
-**Explanation:** This is by design - only one task is active per node instance. Use multiple node instances for multiple independent schedules.
-
-## 🧪 Testing
-
-Run the test suite:
+## Testing
 
 ```bash
 npm test
+npm run lint
 ```
 
-## 🤝 Contributing
+## Contributing
 
-Contributions are what make the open source community such an amazing place to learn, inspire, and create. Any contributions you make are **greatly appreciated**.
+See [CONTRIBUTING.md](CONTRIBUTING.md). Bug reports and PRs welcome — please add tests for behavioral changes.
 
-1. Fork the Project
-2. Create your Feature Branch (`git checkout -b feature/AmazingFeature`)
-3. Commit your Changes (`git commit -m 'Add some AmazingFeature'`)
-4. Push to the Branch (`git push origin feature/AmazingFeature`)
-5. Open a Pull Request
+## License
 
-See [CONTRIBUTING.md](CONTRIBUTING.md) for more details.
-
-## 📝 Changelog
-
-See [CHANGELOG.md](CHANGELOG.md) for a list of changes.
-
-## 📄 License
-
-ISC © Carlos Fontán
-
-## 🔗 Links
-
-- [npm package](https://www.npmjs.com/package/node-red-contrib-fff-cron-task)
-- [GitHub repository](https://github.com/fishfarmfeeder/node-red-contrib-fff-cron-task)
-- [Issues](https://github.com/fishfarmfeeder/node-red-contrib-fff-cron-task/issues)
-
----
-
-**Made with ❤️ by [Fish Farm Feeder](https://github.com/fishfarmfeeder)**
+ISC — Carlos Fontán.
