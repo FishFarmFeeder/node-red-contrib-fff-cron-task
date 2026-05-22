@@ -25,63 +25,68 @@
         <input type="checkbox" id="node-input-persistent" style="display:inline-block; width:auto; vertical-align:baseline;">
         <label for="node-input-persistent" style="width:auto;">Save jobs across restarts</label>
     </div>
-    <!-- timezone setting removed; Node-RED runtime timezone should be used -->
 </script>
 
 <script type="text/html" data-help-name="fff-cron-task">
-    <p>A robust node for scheduling tasks using specific Dates or Cron patterns with persistence support.</p>
-    
+    <p>Schedule one-shot or recurring tasks using a Date or a cron expression. Supports multiple independent jobs in one node and optional persistence across restarts.</p>
+
     <h3>Configuration</h3>
     <dl class="message-properties">
         <dt>Persistent <span class="property-type">boolean</span></dt>
-        <dd>If checked, the scheduled job will be saved and restored across Node-RED restarts.</dd>
+        <dd>When checked, scheduled jobs are stored in the node context and restored on redeploy or restart. See the Persistence note below.</dd>
     </dl>
-    
+
     <h3>Inputs</h3>
     <dl class="message-properties">
-        <dt>msg.inputDate
-            <span class="property-type">string | Date</span>
-        </dt>
-        <dd>
-            The schedule definition. Can be:
-            <ul>
-                <li>A <code>Date</code> object or date string (e.g., "2025-12-25 10:00:00") for a one-time execution. <b>Must be in the future.</b></li>
-                <li>A Cron string (e.g., <code>"*/10 * * * * *"</code>) for recurring execution.</li>
-            </ul>
-        </dd>
-        
+        <dt>msg.cron <span class="property-type">string</span></dt>
+        <dd>Cron expression with 5 or 6 fields (e.g. <code>"*/10 * * * *"</code>). When set, the input is validated strictly as cron.</dd>
+
+        <dt>msg.date <span class="property-type">Date | string</span></dt>
+        <dd>One-shot execution time. Must be in the future. When set, the input is validated strictly as a date.</dd>
+
+        <dt>msg.inputDate <span class="property-type">string | Date</span></dt>
+        <dd>Legacy field. Accepts either a cron expression or a date and auto-detects which is which. Kept for backward compatibility — prefer <code>msg.cron</code> or <code>msg.date</code> for new flows.</dd>
+
+        <dt class="optional">msg.job_id <span class="property-type">string</span></dt>
+        <dd>Identifies the job inside this node instance. Defaults to <code>"default"</code>. Use different ids to run multiple jobs in parallel.</dd>
+
         <dt class="optional">msg.action <span class="property-type">string</span></dt>
-        <dd>Set to <code>"cancel"</code> to stop the currently scheduled task.</dd>
+        <dd>Set to <code>"cancel"</code> to stop the job referenced by <code>msg.job_id</code>.</dd>
     </dl>
+
+    <p>If more than one of <code>msg.cron</code>, <code>msg.date</code> or <code>msg.inputDate</code> is set, the priority is: <code>msg.cron</code> &gt; <code>msg.date</code> &gt; <code>msg.inputDate</code>.</p>
 
     <h3>Outputs</h3>
     <ol class="node-ports">
         <li>Triggered events
             <dl class="message-properties">
                 <dt>payload <span class="property-type">string</span></dt>
-                <dd>Returns <code>"triggered"</code> when the schedule fires.</dd>
-                
+                <dd>Always <code>"triggered"</code> when the schedule fires.</dd>
+
                 <dt>original_payload <span class="property-type">string | Date</span></dt>
-                <dd>The original schedule input that triggered this event.</dd>
-                
+                <dd>The original schedule input that fired.</dd>
+
+                <dt>job_id <span class="property-type">string</span></dt>
+                <dd>The job id that fired.</dd>
+
                 <dt>timestamp <span class="property-type">number</span></dt>
-                <dd>The timestamp (ms) when the event fired.</dd>
+                <dd>Epoch milliseconds at fire time.</dd>
             </dl>
         </li>
         <li>Errors
             <dl class="message-properties">
                 <dt>payload <span class="property-type">string</span></dt>
-                <dd>Error message describing what went wrong.</dd>
-                
+                <dd>Human-readable error message.</dd>
+
                 <dt>error <span class="property-type">object</span></dt>
-                <dd>Error details including type and context.</dd>
+                <dd>Structured error with a <code>type</code> field. Possible types: <code>MissingInput</code>, <code>InvalidCron</code>, <code>InvalidDate</code>, <code>PastDate</code>, <code>ScheduleFailed</code>, <code>ScheduleError</code>.</dd>
             </dl>
         </li>
     </ol>
 
-    <h3>Details</h3>
-    <p>This node supports multiple job IDs for the same node instance. Send a `msg.job_id` with `msg.inputDate` to schedule multiple independent jobs; otherwise the default `"default"` job will be replaced when a new schedule is sent.</p>
-    <p><b>Validation:</b> Dates are validated to be in the future. Cron strings are validated using the <code>cron-parser</code> library. Invalid inputs will result in an error message on the second output.</p>
-    <p><b>Persistence:</b> When enabled, scheduled jobs are saved to Node-RED context (`scheduled_jobs`) and automatically restored after restarts or redeploys. Each job is stored under its `job_id` key.</p>
+    <h3>Persistence</h3>
+    <p>When <b>Persistent</b> is enabled, jobs are written to the node context under the key <code>scheduled_jobs</code> and restored on restart or redeploy. <b>Important:</b> by default Node-RED stores context in memory, so jobs are lost on a real process restart. To survive restarts, configure a filesystem context store in <code>settings.js</code>:</p>
+    <pre>contextStorage: {
+    default: { module: "localfilesystem" }
+}</pre>
 </script>
-

@@ -1,108 +1,120 @@
-module.exports = function(RED) {
+module.exports = function (RED) {
     const schedule = require('node-schedule');
     const cronParser = require('cron-parser');
 
-    // Constants
     const STATUS_UPDATE_DELAY = 1000;
 
     function CronTaskNode(config) {
         RED.nodes.createNode(this, config);
-        var node = this;
-        
-        // Jobs map to support multiple jobs by ID
-        node.jobs = {};
-        
-        // Configuration
+        const node = this;
+
+        node.jobs = {};      // jobId -> scheduled object returned by node-schedule
+        node.jobMeta = {};   // jobId -> { scheduleInput, type, createdAt }
         node.persistent = config.persistent || false;
-        // timezone support removed; rely on Node-RED runtime timezone
 
-        /**
-         * Validates and parses a cron string
-         */
-        function isValidCron(cronString) {
-            if (typeof cronString !== 'string') return false;
-            
-            try {
-                cronParser.parseExpression(cronString);
-                return true;
-            } catch (e) {
-                return false;
+        function validateInput(input, expectedType) {
+            if (input instanceof Date) {
+                if (isNaN(input.getTime())) {
+                    return { ok: false, errorType: 'InvalidDate' };
+                }
+                if (expectedType === 'cron') {
+                    return { ok: false, errorType: 'InvalidCron' };
+                }
+                return { ok: true, type: 'date', value: input };
             }
+
+            if (typeof input !== 'string') {
+                return { ok: false, errorType: expectedType === 'cron' ? 'InvalidCron' : 'InvalidDate' };
+            }
+
+            if (expectedType === 'cron') {
+                try {
+                    cronParser.parseExpression(input);
+                    return { ok: true, type: 'cron', value: input };
+                } catch (_err) {
+                    return { ok: false, errorType: 'InvalidCron' };
+                }
+            }
+
+            if (expectedType === 'date') {
+                const d = new Date(input);
+                if (isNaN(d.getTime())) {
+                    return { ok: false, errorType: 'InvalidDate' };
+                }
+                return { ok: true, type: 'date', value: d };
+            }
+
+            // Auto-detect (legacy msg.inputDate path): try cron first, then date.
+            try {
+                cronParser.parseExpression(input);
+                return { ok: true, type: 'cron', value: input };
+            } catch (_err) { /* not a cron, fall through */ }
+
+            const d = new Date(input);
+            if (!isNaN(d.getTime())) {
+                return { ok: true, type: 'date', value: d };
+            }
+
+            // Both parsers failed. Pick the more likely intent for the error type
+            // so legacy users get the message that matches their input.
+            const looksLikeDate = /\bdate\b/i.test(input);
+            return { ok: false, errorType: looksLikeDate ? 'InvalidDate' : 'InvalidCron' };
         }
 
-        /**
-         * Determines if input is a cron string
-         */
-        function isCronString(input) {
-            if (typeof input !== 'string') return false;
-            
-            // Basic check: cron has 5 or 6 fields
-            const parts = input.trim().split(/\s+/);
-            if (parts.length < 5 || parts.length > 6) return false;
-            
-            return isValidCron(input);
+        function errorMessageFor(errorType, input) {
+            if (errorType === 'InvalidCron') return `Invalid cron string: ${input}`;
+            if (errorType === 'InvalidDate') return `Invalid date format: ${input}`;
+            return `Invalid schedule input: ${input}`;
         }
 
-        /**
-         * Updates the node status based on current job
-         */
+        function sendError(type, payload, extras, msg, isRestoring) {
+            if (isRestoring) return;
+            const errorMsg = {
+                payload,
+                error: Object.assign({ type }, extras || {})
+            };
+            node.send([null, errorMsg]);
+            node.error(payload, msg);
+        }
+
         function updateNodeStatus() {
-            const jobIds = Object.keys(node.jobs || {});
-            if (!jobIds.length) {
-                node.status({fill:"grey", shape:"ring", text:"no job"});
+            const jobIds = Object.keys(node.jobs);
+            if (jobIds.length === 0) {
+                node.status({ fill: 'grey', shape: 'ring', text: 'no job' });
                 return;
             }
-            // Show next invocation for the earliest job if any
+
             let next = null;
-            jobIds.forEach(id => {
+            for (const id of jobIds) {
                 try {
                     const j = node.jobs[id];
-                    if (j && j.nextInvocation) {
+                    if (j && typeof j.nextInvocation === 'function') {
                         const n = j.nextInvocation();
                         if (n && (!next || n < next)) next = n;
                     }
                 } catch (_err) { /* ignore */ }
-            });
+            }
+
             if (next) {
-                node.status({
-                    fill:"blue", 
-                    shape:"dot", 
-                    text: next.toLocaleString()
-                });
+                node.status({ fill: 'blue', shape: 'dot', text: next.toLocaleString() });
             } else {
-                node.status({fill:"grey", shape:"ring", text:"completed"});
+                node.status({ fill: 'grey', shape: 'ring', text: 'completed' });
             }
         }
 
-        /**
-         * Explicitly save job to context
-         * Called ONLY when a job is successfully scheduled
-         */
         function saveJobsToContext() {
             if (!node.persistent) return;
-
             const toSave = {};
-            Object.keys(node.jobs).forEach(id => {
-                const job = node.jobs[id];
-                if (job && job._scheduleInput) {
-                    toSave[id] = { scheduleInput: job._scheduleInput };
-                }
-            });
-
+            for (const id of Object.keys(node.jobMeta)) {
+                toSave[id] = { scheduleInput: node.jobMeta[id].scheduleInput };
+            }
             try {
                 node.context().set('scheduled_jobs', toSave);
             } catch (err) {
-                node.error("Failed to save context: " + err.toString());
+                node.error('Failed to save context: ' + err.toString());
             }
         }
 
-        /**
-         * Explicitly clear job from context
-         * Called when job is cancelled or completed (non-cron)
-         */
-        /**
-         * Remove a specific job from context
-         */
         function removeJobFromContext(jobId) {
             if (!node.persistent) return;
             try {
@@ -112,22 +124,18 @@ module.exports = function(RED) {
                     node.context().set('scheduled_jobs', saved);
                 }
             } catch (err) {
-                node.error("Failed to update context: " + err.toString());
+                node.error('Failed to update context: ' + err.toString());
             }
         }
 
-        /**
-         * Restore job from context if persistence is enabled
-         */
-        function restoreJobFromContext() {
+        function restoreJobsFromContext() {
             if (!node.persistent) {
                 updateNodeStatus();
                 return;
             }
-            
-            node.context().get('scheduled_jobs', function(err, jobsData) {
+            node.context().get('scheduled_jobs', function (err, jobsData) {
                 if (err) {
-                    node.warn("Failed to get context: " + err.toString());
+                    node.warn('Failed to get context: ' + err.toString());
                     updateNodeStatus();
                     return;
                 }
@@ -135,228 +143,183 @@ module.exports = function(RED) {
                     updateNodeStatus();
                     return;
                 }
-
-                Object.keys(jobsData).forEach(id => {
-                    const jobData = jobsData[id];
-                    if (jobData && jobData.scheduleInput !== undefined) {
-                        scheduleJob(jobData.scheduleInput, null, true, false, id);
+                for (const id of Object.keys(jobsData)) {
+                    const entry = jobsData[id];
+                    if (entry && entry.scheduleInput !== undefined) {
+                        scheduleJob(entry.scheduleInput, null, {
+                            isRestoring: true,
+                            shouldSave: false,
+                            jobId: id
+                        });
                     }
-                });
+                }
             });
         }
 
-        /**
-         * Schedule a job
-         * @param {*} scheduleInput - Date or cron string
-         * @param {*} msg - Original message
-         * @param {boolean} isRestoring - If true, suppress errors for past dates
-         * @param {boolean} shouldSave - If true, save to context (default: true)
-         */
-        function scheduleJob(scheduleInput, msg, isRestoring = false, shouldSave = true, jobId = null) {
-            // Cancel existing job if any
-            jobId = jobId || (msg && msg.job_id) || 'default';
-            if (!node.jobs) node.jobs = {};
+        function scheduleJob(scheduleInput, msg, opts) {
+            opts = opts || {};
+            const isRestoring = !!opts.isRestoring;
+            const shouldSave = opts.shouldSave !== false;
+            const expectedType = opts.expectedType || null;
+            const jobId = opts.jobId || (msg && msg.job_id) || 'default';
+
+            // Cancel existing job under this id, if any.
             if (node.jobs[jobId]) {
                 try { node.jobs[jobId].cancel(); } catch (_err) { /* ignore */ }
-                node.jobs[jobId] = null;
                 delete node.jobs[jobId];
+                delete node.jobMeta[jobId];
             }
 
-            var isCron;
-            if (typeof scheduleInput === 'string') {
-                // If the string looks like a date (ISO yyyy-mm-dd or numeric timestamp or contains 'T'), treat as date
-                const looksLikeDate = /^\d{4}-\d{2}-\d{2}/.test(scheduleInput) || /^\d{13}$/.test(scheduleInput) || scheduleInput.indexOf('T') >= 0;
-                if (looksLikeDate) {
-                    isCron = false;
-                } else {
-                    // Heuristics to determine if it is a cron: contains cron-type characters, or 5+ parts
-                    const looksLikeCronChars = /[*/,-]/.test(scheduleInput) || /(\*|\d)/.test(scheduleInput);
-                    const parts = scheduleInput.trim().split(/\s+/);
-                    const hasEnoughParts = parts.length >= 5 && parts.length <= 6;
-                    const containsCronKeyword = /\bcron\b/i.test(scheduleInput);
-                    const containsDateKeyword = /\bdate\b/i.test(scheduleInput);
-
-                    if (containsCronKeyword || looksLikeCronChars || hasEnoughParts) {
-                        isCron = true;
-                    } else if (containsDateKeyword) {
-                        isCron = false;
-                    } else {
-                        // Default to cron for ambiguous strings to ensure invalid cron errors for cron-like inputs
-                        isCron = true;
-                    }
-                }
-            } else {
-                isCron = isCronString(scheduleInput);
+            const result = validateInput(scheduleInput, expectedType);
+            if (!result.ok) {
+                const statusText = result.errorType === 'InvalidCron' ? 'invalid cron' : 'invalid date';
+                sendError(
+                    result.errorType,
+                    errorMessageFor(result.errorType, scheduleInput),
+                    { input: scheduleInput },
+                    msg,
+                    isRestoring
+                );
+                node.status({ fill: 'red', shape: 'ring', text: statusText });
+                return;
             }
-            var scheduleConfig = scheduleInput;
 
-            if (!isCron) {
-                // It's a date
-                var date = new Date(scheduleInput);
-                if (isNaN(date.getTime())) {
-                    if (!isRestoring) {
-                        const errorMsg = {
-                            payload: `Invalid date format: ${scheduleInput}`,
-                            error: { type: 'InvalidDate', input: scheduleInput }
-                        };
-                        node.send([null, errorMsg]);
-                        node.error("Invalid date format: " + scheduleInput, msg);
-                    }
-                    node.status({fill:"red", shape:"ring", text:"invalid date"});
-                    return;
-                }
-                
-                if (date <= new Date()) {
-                    if (!isRestoring) {
-                        const errorMsg = {
-                            payload: `Date must be in the future: ${scheduleInput}`,
-                            error: { type: 'PastDate', input: scheduleInput, date: date.toISOString() }
-                        };
-                        node.send([null, errorMsg]);
-                        node.error("Date must be in the future: " + scheduleInput, msg);
-                    }
-                    // If restoring and date is past, just show status but don't error output
-                    // Also clear context since this job is dead
+            let scheduleConfig;
+            if (result.type === 'date') {
+                if (result.value <= new Date()) {
                     if (isRestoring) {
-                        node.status({fill:"grey", shape:"ring", text:"past date (ignored)"});
+                        node.status({ fill: 'grey', shape: 'ring', text: 'past date (ignored)' });
                         removeJobFromContext(jobId);
+                    } else {
+                        sendError(
+                            'PastDate',
+                            `Date must be in the future: ${scheduleInput}`,
+                            { input: scheduleInput, date: result.value.toISOString() },
+                            msg,
+                            false
+                        );
                     }
                     return;
                 }
-                
-                scheduleConfig = date;
+                scheduleConfig = result.value;
             } else {
-                // Validate cron
-                if (!isValidCron(scheduleInput)) {
-                    if (!isRestoring) {
-                        const errorMsg = {
-                            payload: `Invalid cron string: ${scheduleInput}`,
-                            error: { type: 'InvalidCron', input: scheduleInput }
-                        };
-                        node.send([null, errorMsg]);
-                        node.error("Invalid cron string: " + scheduleInput, msg);
-                    }
-                    node.status({fill:"red", shape:"ring", text:"invalid cron"});
-                    return;
-                }
+                scheduleConfig = result.value;
             }
 
             try {
-                // Schedule the job
-                const scheduled = schedule.scheduleJob(scheduleConfig, function() {
+                const scheduled = schedule.scheduleJob(scheduleConfig, function () {
                     node.send([{
-                        payload: "triggered",
+                        payload: 'triggered',
                         original_payload: scheduleInput,
                         job_id: jobId,
                         timestamp: Date.now()
                     }, null]);
-                    
-                    node.status({fill:"green", shape:"dot", text:"triggered"});
-                    
-                    // If it was a one-time date, clear from context after execution
-                    if (!isCron) {
-                        if (node.persistent) {
-                            // remove this job from persisted store
-                            removeJobFromContext(jobId);
-                        }
-                        if (node.jobs && node.jobs[jobId]) {
-                            node.jobs[jobId] = null;
-                            delete node.jobs[jobId];
-                        }
+
+                    node.status({ fill: 'green', shape: 'dot', text: 'triggered' });
+
+                    if (result.type === 'date') {
+                        removeJobFromContext(jobId);
+                        delete node.jobs[jobId];
+                        delete node.jobMeta[jobId];
                     }
-                    
-                    // Update status after a brief moment
-                    setTimeout(function() {
-                        updateNodeStatus();
-                    }, STATUS_UPDATE_DELAY);
+
+                    setTimeout(updateNodeStatus, STATUS_UPDATE_DELAY);
                 });
+
                 if (scheduled) {
-                    scheduled._scheduleInput = scheduleInput;
-                    scheduled._jobId = jobId;
                     node.jobs[jobId] = scheduled;
+                    node.jobMeta[jobId] = {
+                        scheduleInput,
+                        type: result.type,
+                        createdAt: Date.now()
+                    };
                     updateNodeStatus();
-                    if (shouldSave) {
-                        saveJobsToContext();
-                    }
+                    if (shouldSave) saveJobsToContext();
                 } else {
-                    if (!isRestoring) {
-                        const errorMsg = {
-                            payload: `Failed to schedule job: ${scheduleInput}`,
-                            error: { type: 'ScheduleFailed', input: scheduleInput }
-                        };
-                        node.send([null, errorMsg]);
-                        node.error("Failed to schedule: " + scheduleInput, msg);
-                    }
-                    node.status({fill:"red", shape:"ring", text:"schedule failed"});
+                    sendError(
+                        'ScheduleFailed',
+                        `Failed to schedule job: ${scheduleInput}`,
+                        { input: scheduleInput },
+                        msg,
+                        isRestoring
+                    );
+                    node.status({ fill: 'red', shape: 'ring', text: 'schedule failed' });
                 }
             } catch (err) {
-                if (!isRestoring) {
-                    const errorMsg = {
-                        payload: `Error scheduling job: ${err.message}`,
-                        error: { type: 'ScheduleError', message: err.message, input: scheduleInput }
-                    };
-                    node.send([null, errorMsg]);
-                    node.error(err, msg);
-                }
-                node.status({fill:"red", shape:"dot", text:"error"});
+                sendError(
+                    'ScheduleError',
+                    `Error scheduling job: ${err.message}`,
+                    { message: err.message, input: scheduleInput },
+                    msg,
+                    isRestoring
+                );
+                node.status({ fill: 'red', shape: 'dot', text: 'error' });
             }
         }
 
-        /**
-         * Cancel the job
-         */
         function cancelJob(jobId) {
             jobId = jobId || 'default';
-            if (node.jobs && node.jobs[jobId]) {
+            if (node.jobs[jobId]) {
                 try { node.jobs[jobId].cancel(); } catch (_err) { /* ignore */ }
-                node.jobs[jobId] = null;
                 delete node.jobs[jobId];
+                delete node.jobMeta[jobId];
                 updateNodeStatus();
-                // Persist the change
                 saveJobsToContext();
             }
         }
 
-        // Restore jobs on startup
-        restoreJobFromContext();
+        restoreJobsFromContext();
 
-        // Handle incoming messages
-        node.on('input', function(msg) {
-            // Check for cancel command
+        node.on('input', function (msg, send, done) {
+            send = send || function () { node.send.apply(node, arguments); };
+            done = done || function (err) { if (err) node.error(err, msg); };
+
             if (msg.action === 'cancel') {
                 cancelJob(msg.job_id);
+                done();
                 return;
             }
 
-            var scheduleInput = msg.inputDate;
-            
-            if (!scheduleInput) {
+            let scheduleInput;
+            let expectedType = null;
+
+            if (msg.cron !== undefined && msg.cron !== null && msg.cron !== '') {
+                scheduleInput = msg.cron;
+                expectedType = 'cron';
+            } else if (msg.date !== undefined && msg.date !== null && msg.date !== '') {
+                scheduleInput = msg.date;
+                expectedType = 'date';
+            } else if (msg.inputDate !== undefined && msg.inputDate !== null && msg.inputDate !== '') {
+                scheduleInput = msg.inputDate;
+                expectedType = null; // auto-detect for legacy field
+            } else {
                 const errorMsg = {
-                    payload: "No schedule input provided in msg.inputDate",
+                    payload: 'No schedule input provided (msg.cron, msg.date or msg.inputDate)',
                     error: { type: 'MissingInput' }
                 };
-                node.send([null, errorMsg]);
-                node.warn("No schedule input provided in msg.inputDate");
+                send([null, errorMsg]);
+                node.warn('No schedule input provided (msg.cron, msg.date or msg.inputDate)');
+                done();
                 return;
             }
 
-            // Schedule new job and save to context
-            scheduleJob(scheduleInput, msg, false, true, msg.job_id || null);
+            scheduleJob(scheduleInput, msg, {
+                jobId: msg.job_id || null,
+                expectedType
+            });
+            done();
         });
 
-        node.on('close', function(_removed, done) {
-            // Cancel all jobs on close but DO NOT clear context (so it persists)
-            if (node.jobs) {
-                Object.keys(node.jobs).forEach(id => {
-                    try { if (node.jobs[id]) node.jobs[id].cancel(); } catch (_err) { /* ignore */ }
-                    node.jobs[id] = null;
-                    delete node.jobs[id];
-                });
+        node.on('close', function (_removed, done) {
+            for (const id of Object.keys(node.jobs)) {
+                try { if (node.jobs[id]) node.jobs[id].cancel(); } catch (_err) { /* ignore */ }
+                delete node.jobs[id];
+                delete node.jobMeta[id];
             }
             updateNodeStatus();
             if (typeof done === 'function') done();
         });
     }
-    
-    RED.nodes.registerType("fff-cron-task", CronTaskNode);
-}
+
+    RED.nodes.registerType('fff-cron-task', CronTaskNode);
+};
