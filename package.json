@@ -1,6 +1,6 @@
 {
     "name": "node-red-contrib-fff-cron-task",
-    "version": "0.0.1",
+    "version": "1.0.0",
     "description": "A Node-RED node to schedule tasks using cron strings or dates.",
     "main": "cron-task.js",
     "scripts": {

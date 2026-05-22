@@ -7,6 +7,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.0.0] - 2026-05-22
+
+This is the first production-grade release. The node has been used in production
+since the `0.0.1` tag; this release locks in a stable API, ships explicit
+control commands and persistence guarantees, and is internally restructured for
+maintainability and localization.
+
 ### Added
 - `msg.cron` and `msg.date` input fields. Each forces strict validation as its respective type (cleaner than the legacy `msg.inputDate`).
 - Explicit warning in README and node help about `contextStorage` being in-memory by default — persistence only survives restarts when a filesystem store is configured.
@@ -53,5 +60,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Weak cron validation that could accept invalid patterns
 - Missing metadata in package.json preventing npm publication
 
-[Unreleased]: https://github.com/fishfarmfeeder/node-red-contrib-fff-cron-task/compare/v0.0.1...HEAD
+[Unreleased]: https://github.com/fishfarmfeeder/node-red-contrib-fff-cron-task/compare/v1.0.0...HEAD
+[1.0.0]: https://github.com/fishfarmfeeder/node-red-contrib-fff-cron-task/compare/v0.0.1...v1.0.0
 [0.0.1]: https://github.com/fishfarmfeeder/node-red-contrib-fff-cron-task/releases/tag/v0.0.1
