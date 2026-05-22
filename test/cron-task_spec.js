@@ -242,7 +242,7 @@ describe('fff-cron-task Node', function () {
                 const n1 = helper.getNode("n1");
                 const n2 = helper.getNode("n2");
                 
-                let triggeredJobs = [];
+                const triggeredJobs = [];
                 n2.on("input", function (msg) {
                     triggeredJobs.push(msg.job_id);
                 });
@@ -311,7 +311,7 @@ describe('fff-cron-task Node', function () {
                 const n1 = helper.getNode("n1");
                 const n2 = helper.getNode("n2");
                 
-                let triggeredJobs = [];
+                const triggeredJobs = [];
                 
                 n2.on("input", function (msg) {
                     triggeredJobs.push(msg.job_id);
@@ -530,7 +530,7 @@ describe('fff-cron-task Node', function () {
                 const n2 = helper.getNode("n2");
 
                 n2.on("input", function (msg) {
-                    if (msg.payload !== 'jobs') return;
+                    if (msg.payload !== 'jobs') {return;}
                     try {
                         msg.should.have.property('jobs');
                         msg.jobs.should.be.an.Array();
@@ -626,7 +626,7 @@ describe('fff-cron-task Node', function () {
                 const n2 = helper.getNode("n2");
 
                 n2.on("input", function (msg) {
-                    if (msg.payload !== 'triggered') return;
+                    if (msg.payload !== 'triggered') {return;}
                     try {
                         msg.should.have.property('nextInvocation');
                         msg.nextInvocation.should.be.a.String();
@@ -653,7 +653,7 @@ describe('fff-cron-task Node', function () {
                 const n2 = helper.getNode("n2");
 
                 n2.on("input", function (msg) {
-                    if (msg.payload !== 'triggered') return;
+                    if (msg.payload !== 'triggered') {return;}
                     try {
                         msg.should.have.property('nextInvocation');
                         (msg.nextInvocation === null).should.equal(true);
