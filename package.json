@@ -20,12 +20,12 @@
     "license": "ISC",
     "repository": {
         "type": "git",
-        "url": "https://github.com/fishfarmfeeder/node-red-contrib-fff-cron-task"
+        "url": "git+https://github.com/FishFarmFeeder/node-red-contrib-fff-cron-task.git"
     },
     "bugs": {
-        "url": "https://github.com/fishfarmfeeder/node-red-contrib-fff-cron-task/issues"
+        "url": "https://github.com/FishFarmFeeder/node-red-contrib-fff-cron-task/issues"
     },
-    "homepage": "https://github.com/fishfarmfeeder/node-red-contrib-fff-cron-task#readme",
+    "homepage": "https://github.com/FishFarmFeeder/node-red-contrib-fff-cron-task#readme",
     "engines": {
         "node": ">=18.0.0"
     },
