@@ -14,10 +14,10 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
 
       - name: Install Node.js
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v5
         with:
           node-version: 22.x
           registry-url: 'https://registry.npmjs.org'
@@ -35,7 +35,7 @@ jobs:
         run: npm pack
 
       - name: Create GitHub release and upload package
-        uses: softprops/action-gh-release@v1
+        uses: softprops/action-gh-release@v2
         with:
           files: |
             node-red-contrib-fff-cron-task-*.tgz
